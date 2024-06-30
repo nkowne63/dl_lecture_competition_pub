@@ -386,11 +386,16 @@ def main():
     # train model
     for epoch in range(num_epoch):
         train_loss, train_acc, train_simple_acc, train_time = train(model, train_loader, optimizer, criterion, device)
+        valid_loss, valid_acc, valid_simple_acc, valid_time = eval(model, test_loader, optimizer, criterion, device)
         print(f"【{epoch + 1}/{num_epoch}】\n"
               f"train time: {train_time:.2f} [s]\n"
               f"train loss: {train_loss:.4f}\n"
               f"train acc: {train_acc:.4f}\n"
-              f"train simple acc: {train_simple_acc:.4f}")
+              f"train simple acc: {train_simple_acc:.4f}\n"
+              f"valid time: {valid_time:.2f} [s]\n"
+              f"valid loss: {valid_loss:.4f}\n"
+              f"valid acc: {valid_acc:.4f}\n"
+              f"valid simple acc: {valid_simple_acc:.4f}")
 
     # 提出用ファイルの作成
     model.eval()
