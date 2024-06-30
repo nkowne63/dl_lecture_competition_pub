@@ -10,6 +10,7 @@ dependencies = [
     "torchvision>=0.18.1",
     "torchaudio>=2.3.1",
     "pandas>=2.2.2",
+    "transformers>=4.42.3",
 ]
 readme = "README.md"
 requires-python = ">= 3.10"

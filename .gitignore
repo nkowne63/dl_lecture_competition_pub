@@ -14,3 +14,5 @@ wheels/
 data/*
 !data/.gitkeep
 *.tmp.*
+*.npy
+outputs

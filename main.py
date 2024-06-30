@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torchvision
 from torchvision import transforms
-
+from tqdm import tqdm
 
 def set_seed(seed):
     random.seed(seed)
@@ -286,11 +286,14 @@ def ResNet18():
 def ResNet50():
     return ResNet(BottleneckBlock, [3, 4, 6, 3])
 
+def Transformer():
+    return nn.Transformer()
+
 
 class VQAModel(nn.Module):
     def __init__(self, vocab_size: int, n_answer: int):
         super().__init__()
-        self.resnet = ResNet18()
+        self.resnet = ResNet50()
         self.text_encoder = nn.Linear(vocab_size, 512)
 
         self.fc = nn.Sequential(
@@ -310,7 +313,7 @@ class VQAModel(nn.Module):
 
 
 # 4. 学習の実装
-def train(model, dataloader, optimizer, criterion, device):
+def train(model, dataloader, optimizer, criterion, device, pbar):
     model.train()
 
     total_loss = 0
@@ -329,14 +332,20 @@ def train(model, dataloader, optimizer, criterion, device):
         loss.backward()
         optimizer.step()
 
-        total_loss += loss.item()
-        total_acc += VQA_criterion(pred.argmax(1), answers)  # VQA accuracy
-        simple_acc += (pred.argmax(1) == mode_answer).float().mean().item()  # simple accuracy
+        inter_loss = loss.item()
+        inter_acc = VQA_criterion(pred.argmax(1), answers)  # VQA accuracy
+        inter_simple_acc = (pred.argmax(1) == mode_answer).float().mean().item()  # simple accuracy
+        pbar.set_postfix({"loss":inter_loss,"accuracy":inter_acc, "simple_acc": inter_simple_acc})
+
+        total_loss += inter_loss
+        total_acc += inter_acc
+        simple_acc += inter_simple_acc
+        pbar.update(1)
 
     return total_loss / len(dataloader), total_acc / len(dataloader), simple_acc / len(dataloader), time.time() - start
 
 
-def eval(model, dataloader, optimizer, criterion, device):
+def eval(model, dataloader, optimizer, criterion, device, pbar):
     model.eval()
 
     total_loss = 0
@@ -351,13 +360,22 @@ def eval(model, dataloader, optimizer, criterion, device):
         pred = model(image, question)
         loss = criterion(pred, mode_answer.squeeze())
 
-        total_loss += loss.item()
-        total_acc += VQA_criterion(pred.argmax(1), answers)  # VQA accuracy
-        simple_acc += (pred.argmax(1) == mode_answer).float().mean().item()  # simple accuracy
+        inter_loss = loss.item()
+        inter_acc = VQA_criterion(pred.argmax(1), answers)  # VQA accuracy
+        inter_simple_acc = (pred.argmax(1) == mode_answer).float().mean().item()  # simple accuracy
+        pbar.set_postfix({"loss":inter_loss,"accuracy":inter_acc, "simple_acc": inter_simple_acc})
+
+        total_loss += inter_loss
+        total_acc += inter_acc
+        simple_acc += inter_simple_acc
+        pbar.update(1)
 
     return total_loss / len(dataloader), total_acc / len(dataloader), simple_acc / len(dataloader), time.time() - start
 
 from torch.utils.data.dataset import Subset
+
+def format_time(t):
+    time.strftime('%m-%d %H:%M:%S', time.localtime(t))
 
 def main():
     # deviceの設定
@@ -390,23 +408,35 @@ def main():
 
     # optimizer / criterion
     # num_epoch = 20
-    num_epoch = 50
+    num_epoch = 20
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
 
+    start = time.time()
     # train model
     for epoch in range(num_epoch):
-        train_loss, train_acc, train_simple_acc, train_time = train(model, train_loader, optimizer, criterion, device)
-        valid_loss, valid_acc, valid_simple_acc, valid_time = eval(model, valid_loader, optimizer, criterion, device)
-        print(f"【{epoch + 1}/{num_epoch}】\n"
-              f"train time: {train_time:.2f} [s]\n"
-              f"train loss: {train_loss:.4f}\n"
-              f"train acc: {train_acc:.4f}\n"
-              f"train simple acc: {train_simple_acc:.4f}\n"
-              f"valid time: {valid_time:.2f} [s]\n"
-              f"valid loss: {valid_loss:.4f}\n"
-              f"valid acc: {valid_acc:.4f}\n"
-              f"valid simple acc: {valid_simple_acc:.4f}")
+        with tqdm(total=len(train_loader),unit="batch",leave=False) as pbar:
+            pbar.set_description(f"Epoch[{epoch + 1}/{num_epoch}](train)")
+            train_loss, train_acc, train_simple_acc, train_time = train(model, train_loader, optimizer, criterion, device, pbar)
+        with tqdm(total=len(valid_loader),unit="batch",leave=False) as pbar:
+            pbar.set_description(f"Epoch[{epoch + 1}/{num_epoch}](test)")
+            valid_loss, valid_acc, valid_simple_acc, valid_time = eval(model, valid_loader, optimizer, criterion, device, pbar)
+        
+        now = time.time()
+        estimated_end = start + (now - start) / (epoch + 1) * num_epoch
+        
+        print(
+            f"【{epoch + 1}/{num_epoch}】\n"
+            f"train time: {train_time:.2f} [s]\n"
+            f"train loss: {train_loss:.4f}\n"
+            f"train acc: {train_acc:.4f}\n"
+            f"train simple acc: {train_simple_acc:.4f}\n"
+            f"valid time: {valid_time:.2f} [s]\n"
+            f"valid loss: {valid_loss:.4f}\n"
+            f"valid acc: {valid_acc:.4f}\n"
+            f"valid simple acc: {valid_simple_acc:.4f}\n"
+            f"estimated end: {format_time(estimated_end)}"
+        )
 
     # 提出用ファイルの作成
     model.eval()
