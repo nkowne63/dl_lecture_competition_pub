@@ -13,3 +13,4 @@ wheels/
 *.pth
 data/*
 !data/.gitkeep
+*.tmp.*
