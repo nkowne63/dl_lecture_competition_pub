@@ -289,28 +289,6 @@ def ResNet50():
 
 def Transformer():
     return nn.Transformer()
-
-
-# class VQAModel(nn.Module):
-#     def __init__(self, vocab_size: int, n_answer: int):
-#         super().__init__()
-#         self.resnet = ResNet50()
-#         self.text_encoder = nn.Linear(vocab_size, 512)
-
-#         self.fc = nn.Sequential(
-#             nn.Linear(1024, 512),
-#             nn.ReLU(inplace=True),
-#             nn.Linear(512, n_answer)
-#         )
-
-#     def forward(self, image, question):
-#         image_feature = self.resnet(image)  # 画像の特徴量
-#         question_feature = self.text_encoder(question)  # テキストの特徴量
-
-#         x = torch.cat([image_feature, question_feature], dim=1)
-#         x = self.fc(x)
-
-#         return x
     
 from transformers import BertModel, BertTokenizer
 
@@ -327,9 +305,11 @@ class VQAModel(nn.Module):
 
         self.resnet = ResNet18()
         self.fc = nn.Sequential(
-            nn.Linear(512 + 768, 512),
+            nn.Linear(512 + 768, 1024),
             nn.ReLU(inplace=True),
-            nn.Linear(512, num_answers),
+            nn.Linear(1024, 768),
+            nn.ReLU(inplace=True),
+            nn.Linear(768, num_answers),
         )
 
     def forward(self, image, question):
@@ -349,7 +329,7 @@ class VQAModel(nn.Module):
             assert question_feature.shape == (N, 768)
         x = torch.cat([image_feature, question_feature], dim=1)
         x = self.fc(x)
-        x = torch.nn.functional.softmax(x, dim=1)
+        # x = torch.nn.functional.softmax(x, dim=1)
         return x
 
 
@@ -416,7 +396,7 @@ def eval(model, dataloader, optimizer, criterion, device, pbar):
 from torch.utils.data.dataset import Subset
 
 def format_time(t):
-    time.strftime('%m-%d %H:%M:%S', time.localtime(t))
+    return time.strftime('%m-%d %H:%M:%S', time.localtime(t))
 
 def main():
     # deviceの設定
@@ -452,9 +432,9 @@ def main():
 
     # optimizer / criterion
     # num_epoch = 20
-    num_epoch = 20
+    num_epoch = 5
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0005, weight_decay=1e-5)
 
     start = time.time()
     # train model
@@ -486,7 +466,7 @@ def main():
     model.eval()
     submission = []
     for image, question in test_loader:
-        image, question = image.to(device), question.to(device)
+        image, question = image.to(device), question
         pred = model(image, question)
         pred = pred.argmax(1).cpu().item()
         submission.append(pred)
